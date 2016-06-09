@@ -2,7 +2,7 @@
 # required libs and configuration to serve as a production host for the
 # g5k-api software.
 class production {
-  include apt
+  include apt::allownotvalid
   include mysql
   include git
   include dpkg::dev
