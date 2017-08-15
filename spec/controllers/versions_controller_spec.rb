@@ -21,9 +21,9 @@ describe VersionsController do
     it "should get the list of versions" do
       get :index, :resource => "/sites", :format => :json
       response.status.should == 200
-      json["total"].should == 8
+      json["total"].should == 10
       json["offset"].should == 0
-      json["items"].length.should == 8
+      json["items"].length.should == 10
       json["links"].map{|l| l["rel"]}.sort.should == ["parent", "self"]
       json["items"][0].keys.sort.should == ["author", "date", "links", "message", "type", "uid"]
       json["items"][0]["links"].map{|l| l["rel"]}.sort.should == ["parent", "self"]

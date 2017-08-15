@@ -1,8 +1,8 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 #
-# -*- mode: ruby -*-
-# vi: set ft=ruby :
+
+Vagrant.require_version ">= 1.8.0"
 
 # Vagrantfile API/syntax version. Don't touch unless you know what you're doing!
 VAGRANTFILE_API_VERSION = "2"
@@ -13,17 +13,20 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   # please see the online documentation at vagrantup.com.
 
   # Every Vagrant virtual environment requires a box to build off of.
-  config.vm.box = "debian-squeeze-x64-puppet_3.0.1"
+  config.vm.box = "debian-jessie-x64-puppet_4"
 
   # The url from where the 'config.vm.box' box will be fetched if it
   # doesn't already exist on the user's system.
-  config.vm.box_url = "https://vagrant.irisa.fr/boxes/debian-squeeze-x64-puppet_3.0.1.box"
+  config.vm.box_url = "https://vagrant.irisa.fr/boxes/debian-jessie-x64-puppet_4_2.box"
 
   # Create a forwarded port mapping which allows access to a specific port
   # within the machine from a port on the host machine. In the example below,
   # accessing "localhost:8080" will access port 80 on the guest machine.
   # config.vm.network :forwarded_port, guest: 80, host: 8080
-  config.vm.network :forwarded_port, guest:  3306, host: 13306
+  config.vm.network :forwarded_port, guest:  13306, host: 13306
+  config.vm.network :forwarded_port, guest:  15432, host: 15432
+  config.vm.network :forwarded_port, guest:   8000, host:  8000
+  config.vm.network :forwarded_port, guest:   8080, host:  8080
 
   # Create a private network, which allows host-only access to the machine
   # using a specific IP.
@@ -42,7 +45,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   # the path on the host to the actual folder. The second argument is
   # the path on the guest to mount the folder. And the optional third
   # argument is a set of non-required options.
-  # config.vm.synced_folder "../data", "/vagrant_data"
+  config.vm.synced_folder "../reference-repository", "/home/vagrant/reference-repository"
 
   # Provider-specific configuration so you can fine-tune various
   # backing providers for Vagrant. These expose provider-specific options.
@@ -62,9 +65,19 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.vm.provider :virtualbox do |vb|
     #make sure DNS will resolve 
     vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
-    vb.customize ["modifyvm", :id, "--memory", "512"]
+    vb.memory = 2048
+    vb.cpus = 2
   end
 
+  # Ease access to stats.g5kadmin
+  config.vm.provision "file", source: "ssh/config", destination: ".ssh/config"
+  config.ssh.forward_agent = true
+
+  #Configure git for within the file
+  if File.exists?("~/.gitconfig")
+    config.vm.provision "file", source: "~/.gitconfig", destination: ".gitconfig"
+  end
+  
   # Enable provisioning with Puppet stand alone.  Puppet manifests
   # are contained in a directory path relative to this Vagrantfile.
   # You will need to create the manifests directory and a manifest in
@@ -84,10 +97,19 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   # # }
   #
   config.vm.provision :puppet do |puppet|
-    puppet.manifests_path = "puppet"
-    puppet.manifest_file  = "development.pp"
-    puppet.module_path = "puppet/modules"
+    puppet.environment = 'development'
+    puppet.environment_path = "puppet"
+    puppet.facter = {
+      "developer" => ENV['DEVELOPER']||'ajenkins',
+      "oardbsite" => ENV['OAR_DB_SITE']||'rennes'
+    }
   end
+
+  # config.vm.provision :file, source: (ENV['SSH_KEY'] && "#{ENV['SSH_KEY']}.pub") || "~/.ssh/authorized_keys", destination: "/tmp/toto"
+  # config.vm.provision :shell, :inline => "sudo mv /tmp/toto /root/.ssh/authorized_keys"
+  # config.vm.provision :shell, :inline => "sudo chown root: /root/.ssh/authorized_keys"
+  # config.vm.provision :shell, :inline => "sudo chown root: /root/.ssh/authorized_keys"
+  # config.vm.provision :shell, :inline => "if [ $(wc -l .ssh/authorized_keys| cut -d ' ' -f 1) -lt 2 ] ; then sudo cat /root/.ssh/authorized_keys >> /home/vagrant/.ssh/authorized_keys ; fi"
 
   # Enable provisioning with chef solo, specifying a cookbooks path, roles
   # path, and data_bags path (all relative to this Vagrantfile), and adding

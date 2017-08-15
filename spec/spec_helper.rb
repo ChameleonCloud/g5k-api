@@ -15,6 +15,9 @@
 ENV["RAILS_ENV"] ||= 'test'
 ENV["RACK_ENV"] ||= ENV["RAILS_ENV"]
 
+require 'simplecov'
+SimpleCov.start 'rails'
+
 require File.expand_path("../../config/environment", __FILE__)
 
 require 'rspec/rails'
@@ -89,7 +92,7 @@ RSpec.configure do |config|
     @now = Time.now
     Time.stub!(:now).and_return(@now)
 
-    Grid5000::Deployment.delete_all
+#    Grid5000::Deployment.delete_all
     @json = nil
   end
 

@@ -9,6 +9,7 @@ var http = new Http();
 var queuedSteps = [];
 var rollback = false;
 var reference = {}
+var retired = {}
 var environments = {}
 var scripts = []
 var sshKeys = []
@@ -62,15 +63,17 @@ Payload.prototype.toHash = function() {
   }
   if (job.environment != "") {
     // custom image
-    var splat = job.environment.split(/-(\d+)\.\d+$/)
+    //var splat = job.environment.split(/-(\d+)\.\d+$/)
     var chunky = {
-      environment: splat[0],
-      version: splat[1],
-      key: job.key == "" ? null : job.key,
-      command: job.command,
-      debug: "debug"
+      environment: job.environment,
+      //version: splat[1],
+      key: ('key' in job) ? job.key: "",
+      command: ('command' in job) ? job.command:"",
+      debug: "debug",
+			nodes_ok: "/home/"+job.user_uid+"/public/Kadpeloy3.%jobid%.nodes_ok",
+			nodes_ko: "/home/"+job.user_uid+"/public/Kadpeloy3.%jobid%.nodes_ko",
     }
-    payload.command = "export CHUNKY='"+$.base64Encode(JSON.stringify(chunky))+"'; curl -k http://public.rennes.grid5000.fr/~crohr/chunky.rb | ruby";
+    payload.command = "kadeploy3 -f $OAR_NODEFILE -e "+job.environment+" -k "+chunky.key+" -n "+chunky["nodes_ko"]+" -o "+chunky["nodes_ok"]+" ; "+chunky.command;
     payload.types = ["deploy"]
   } else {
     payload.command = job.command
@@ -125,39 +128,6 @@ var UIConsole = {
     $(document).scrollTo($("#console"), 1000);
   }
 }
-
-/*
- * Function that converts node attributes
- */
-function nodeConverter( item ) {
-  item.label = item.uid;
-  item.processor_clock_speed = 0;
-  delete item['links']
-  return flatten(item, function(item, property, value) {
-    switch(property) {
-      case "network_adapters_0_rate":
-        return (value/GIGA).toFixed(0);
-      case "network_adapters_1_rate":
-        return (value/GIGA).toFixed(0);
-      case "network_adapters_2_rate":
-        return (value/GIGA).toFixed(0);
-      case "storage_devices_0_size":
-        return (value*GIBI/GIGA/GIGA).toFixed(0);
-      case "main_memory_ram_size":
-        return (value/MEBI);
-      case "processor_clock_speed":
-        return value/GIGA.toFixed(2);
-      case "processor_cache_l1d":
-      case "processor_cache_l1i":
-        if (value) {  return (value/KIBI);  } else {  return value;  }
-      case "processor_cache_l2":
-        if (value) {  return (value/KIBI);  } else {  return value;  }
-      default:
-        return value;
-    }
-  })
-}
-
 
 String.prototype.capitalize = function() {
   return this.charAt(0).toUpperCase() + this.substring(1).toLowerCase();
@@ -216,9 +186,11 @@ $(document).ajaxStop(function() {
             "storage_devices_0_size":{valueType:"number"},
             "network_adapters_0_rate":{valueType:"number"},
             "network_adapters_1_rate":{valueType:"number"},
-            "network_adapters_2_rate":{valueType:"number"}
-          }, 
-          types:{"node":{"pluralLabel":"nodes"}}, 
+            "network_adapters_2_rate":{valueType:"number"},
+            "network_adapters_3_rate":{valueType:"number"},
+						"architecture_nb_cores":{valueType:"number"}
+          },
+          types:{"node":{"pluralLabel":"nodes"}},
           items: _.values(reference)
         }
         window.database = Exhibit.Database.create();
@@ -273,8 +245,12 @@ $(document).ready(function() {
   // Poor man's hook!
   Exhibit.UI.hideBusyIndicator2 = Exhibit.UI.hideBusyIndicator;
   Exhibit.UI.hideBusyIndicator = function() {
-    $(document).trigger("exhibit:refresh")
-    Exhibit.UI.hideBusyIndicator2()
+		$(document).trigger("exhibit:refresh") ;
+
+		// go a bit further than native exhibit by hiding empty properties
+		$(".exhibit-flowingFacet .exhibit-flowingFacet-body:not(:empty)").parents(".exhibit-flowingFacet").show() ;
+		$(".exhibit-flowingFacet .exhibit-flowingFacet-body:empty").parents(".exhibit-flowingFacet").hide() ;
+    Exhibit.UI.hideBusyIndicator2() ;
   }
   
   // Fix to force sliders to call the busy indicator when values change
@@ -321,28 +297,35 @@ $(document).ready(function() {
         var hostname, resa, available_for;
         var now = new Date().getTime()/1000;
         _.each(data.nodes, function(node_status, node_uid) {
-          hostname = node_uid
-          reference[hostname] = reference[hostname] || {
-            id: hostname,
-            label: hostname.split(".")[0],
-            grid_uid: grid.uid,
-            site_uid: site.uid,
-            cluster_uid: hostname.split("-")[0]
-          }
-          resa = node_status.reservations[0] || {
-            started_at: Infinity, 
-            walltime: 0
-          }
-          if (resa.started_at < now && (resa.started_at+resa.walltime) >= now) {
-            available_for = 0;
-          } else {  
-            available_for = Math.min((resa.started_at-now)/3600, 23).toFixed(2);
-          }
-          $.extend(reference[hostname], {
-            hard_state: node_status.hard,
-            syst_state: node_status.soft,
-            available_for: available_for
-          })
+	  hostname = node_uid ;
+	  if (!node_status.comment.toLowerCase().startsWith('retired')) {
+            reference[hostname] = reference[hostname] || {
+              id: hostname,
+              label: hostname.split(".")[0],
+              grid_uid: grid.uid,
+              site_uid: site.uid,
+              cluster_uid: hostname.split("-")[0]
+            }
+            resa = node_status.reservations[0] || {
+              started_at: Infinity, 
+              walltime: 0
+            }
+            if (resa.started_at < now && (resa.started_at+resa.walltime) >= now) {
+              available_for = 0;
+            } else {  
+              available_for = Math.min((resa.started_at-now)/3600, 23).toFixed(2);
+            }
+            $.extend(reference[hostname], {
+              hard_state: node_status.hard,
+              syst_state: node_status.soft,
+              available_for: available_for
+            })
+	  } else {
+	      retired[hostname]={hard_state: 'retired'} ;
+	      if (hostname in reference) {
+		  reference[hostname]['hard_state']='retired' ;
+	      }
+	  }
         })
       }
     }); // GET /grid5000/sites/:site/status
@@ -376,18 +359,51 @@ $(document).ready(function() {
         _.each(data.items, function(cluster) {
           $(document).trigger("grid:site:cluster", [grid, site, cluster])
         });
+			},
+			ko: function(data) {
+					UIConsole.info("Error fetching clusters"); 
       }
     }); // GET /grid5000/sites/:site/clusters
     
-    http.get(http.linkTo(site.links, "environments"), {
-      timeout: 15000,
-      before: function() { 
-        UIConsole.info("Fetching environments deployable on "+grid.uid+"/"+site.uid+"...")
-      },
-      ok: function(data) {
-        environments[site.uid] = data.items
-      }
-    }); // GET /grid5000/sites/:site/environments
+		var site_environments=http.linkTo(site.links, "environments");
+	  if (site_environments != null) {
+      http.get(site_environments, {
+        timeout: 15000,
+        before: function() { 
+          UIConsole.info("Fetching environments deployable on "+grid.uid+"/"+site.uid+"...")
+        },
+        ok: function(data) {
+			  	site_environments = $.map(data.items, function(env) {
+					  return env.uid.split(/-(\d+)\.\d+$/)[0]
+				  }) ;
+				  environments[site.uid] = site_environments.filter(function(elem, pos,arr) {
+					  return arr.indexOf(elem) == pos;
+				  }); 
+			  },
+			  ko: function(data) {
+					UIConsole.info("Could not get environment of "+grid.uid+"/"+site.uid); 
+        }
+      }); // GET /grid5000/sites/:site/environments
+    } else {
+			//Did not find a direct link : will revert to using the internal API
+			site_environments=http.linkTo(site.links, "self")+"/internal/kadeployapi/environments/?last=true&username=deploy";
+			http.get(site_environments, {
+				timeout: 15000,
+				before: function() { 
+					UIConsole.info("Fetching environments deployable on "+grid.uid+"/"+site.uid+" from internal api...")
+				},
+				ok: function(data) {
+			  	local_environments = $.map(data, function(env) {
+					  return env.name
+				  }) ;
+				  environments[site.uid] = local_environments ; 
+			  },
+			  ko: function(data) {
+					UIConsole.info("Could not get environment of "+grid.uid+"/"+site.uid); 
+        }
+      }); // GET /grid5000/sites/:site/internal/kadeployapi/environments/?last=true&username=
+				
+		}
   });
   
   $(document).bind("grid:site:cluster", function(event, grid, site, cluster) {
@@ -399,14 +415,18 @@ $(document).ready(function() {
       ok: function(data) {
         var hostname;
         _.each(data.items, function(node) {
-          hostname = [node.uid, site.uid, grid.uid].join(".")
-          reference[hostname] = reference[hostname] || {
+          hostname = [node.uid, site.uid, grid.uid, 'fr'].join(".")
+	    reference[hostname] = reference[hostname] || {
             id: hostname,
             label: node.uid,
             grid_uid: grid.uid,
             site_uid: site.uid,
-            cluster_uid: hostname.split("-")[0]
-          }
+            cluster_uid: hostname.split("-")[0],
+      }
+						reference[hostname]["queues"]=cluster.queues;
+	  if (hostname in retired) {
+	      reference[hostname]['hard_state']='retired' ;
+	  }  
           $.extend(reference[hostname], nodeConverter(node))
         });
       }
@@ -420,6 +440,23 @@ $(document).ready(function() {
   // ===================
   $(document).bind("exhibit:refresh", function() {
     $(".exhibit-collectionView-header-sortControls, .exhibit-collectionView-footer").hide()
+		var site_groups = $.find(".exhibit-collectionView-group h1") ;
+		if (site_groups.length == 0) {
+			var viewPanelBody=$.find(".exhibit-collectionView-body");
+			var content=$("ol",viewPanelBody);
+			content.detach();
+			var resources=$.map($("li .node",content), function(e) {
+				return $(e).attr('ex:itemid')
+			}) ;
+      var siteUid    = resources[0].split(".")[1];
+      var clusterUid = resources[0].split("-")[0];
+			$(".exhibit-collectionView-body").append('<div class="exhibit-collectionView-group"> \
+                              <h1>'+siteUid+'<span class="exhibit-collectionView-group-count"> \
+                               (<span>1</span>)</span></h1>\
+                              <div class="exhibit-collectionView-group-content">') ;
+			$(".exhibit-collectionView-group-content",viewPanelBody).append(content);
+			
+		}
     $.each($(".exhibit-collectionView-group-content ol"), function(i, item) {
       var group       = $(item).closest(".exhibit-collectionView-group")
       var nodesCount  = $("li", group).length
@@ -429,6 +466,17 @@ $(document).ready(function() {
       var siteUid    = resources[0].split(".")[1];
       var clusterUid = resources[0].split("-")[0];
 
+		  //In some cases, group can point to the whole site
+			// rather than to the cluster level
+			if (group.children("h1").length > 0) {
+				//recreate a cluster level in the dom
+				$(item).detach() ;
+				$(".exhibit-collectionView-group-content",group).append('<div class="exhibit-collectionView-group"> \
+                             <h2>'+clusterUid+'<span class="exhibit-collectionView-group-count"> \
+                             (<span>1</span>)</span></h2>\
+                              <div class="exhibit-collectionView-group-content">') ;
+				group=$(".exhibit-collectionView-group",group) ;
+			}
       group.addClass("choice clear").attr('id', clusterUid).html('\
         <div class="slider">\
           <input type="hidden" name="jobs['+clusterUid+'][site_uid]" value="'+siteUid+'" />\
@@ -446,7 +494,7 @@ $(document).ready(function() {
             <select name="jobs['+clusterUid+'][environment]">\
               <option value="" selected="selected">production</option>\
               '+_.map(environments[siteUid] || [], function(env) { 
-                return '<option value="'+env.uid+'">'+env.uid+'</option>'
+                return '<option value="'+env+'">'+env+'</option>'
               }).join("")+'\
             </select>\
           </div>\
@@ -462,9 +510,7 @@ $(document).ready(function() {
             </select>\
           </div>\
           <div class="ssh-public-key" style="display:none">\
-            <label for="jobs['+clusterUid+'][key]">Paste in your SSH Public Key(s):</label><br/>\
-            <textarea name="jobs['+clusterUid+'][key]" class="key"></textarea>\
-            ...or select one of your existing public keys<span class="key_link"></span>:\
+            <label for="jobs['+clusterUid+'][key]">Select a specific SSH Public Key(s) (will use your ~/.ssh/authorized_key by default):</label><br/>\
             <select>\
               <option value="" selected="selected"></option>\
               '+_.map(scripts || [], function(script) { 
@@ -517,7 +563,6 @@ $(document).ready(function() {
   // = Submit form, instantiate timers =
   // ===================================
   $('form').bind("submit whatever", function() {
-    
     queuedSteps.push("form:submit")
     rollback = false;
     
@@ -527,7 +572,7 @@ $(document).ready(function() {
     obj.jobs = obj.jobs || []
 
     if (_.size(obj.jobs) > 0) {
-      UIConsole.showBusyIndicator()
+      UIConsole.showBusyIndicator() ;
       _.each(obj.jobs, function(job, cluster_uid) {
         job.user_uid = userUid;
         job.cluster_uid = cluster_uid;
@@ -540,46 +585,57 @@ $(document).ready(function() {
           http.post(http.linkTo(site.links, "jobs"), JSON.stringify(payload.toHash()), {
             contentType: "application/json",
             before: function() {
-              UIConsole.info("Submitting job on "+site.uid+"...")
+              UIConsole.info("Submitting job on "+site.uid+" using "+http.linkTo(site.links, "jobs")+"...");
             },
             ok: function(data) {
               UIConsole.info("Successfully submitted job #"+data.uid+" in "+site.uid+".")
               data.site_uid = site.uid
               data.user_uid = userUid
               data.cluster_uid = cluster_uid
-              // Check STDOUT and STDERR
-              _.each(["stdout", "stderr"], function(out) {
-                data[out] = ""
-                data["poll"+out.capitalize()] = window.setInterval(function() {
-                  http.get(http.linkTo(site.links, "self")+"/public/"+data.user_uid+"/OAR."+data.uid+"."+out, {
-                    cache: false,
-                    dataType: "text",
-                    ok: function(output) {
-                      var diff = output.substring(data[out].length).split("\n")
-                      data[out] = output
-                      _.each(diff, function(line) {
-                        if (line != "") {
-                          UIConsole.info(line, data.site_uid+"/"+data.uid+"/"+out.toUpperCase())
-                        }
-                      });
-                    }
-                  })
-                }, 3000)
-              });
 
+							data.state="waiting" ; //true until we get more news 
+              submittedJobs.push(data);
               // Check job STATE
               data.pollState = window.setInterval(function() {
                 http.get(http.linkTo(data.links, "self"), {
                   ok: function(job) {
                     $.extend(true, data, job)
-                    if (data.state != "running") {
-                      UIConsole.info("Job #"+data.uid+" is no longer running. Final state="+data.state+".")
+                    if ($.inArray(data.state, ["running", "launching", "waiting"]) == -1) {
+                      UIConsole.info("Job #"+data.uid+" is no longer waiting of running. Final state="+data.state+".")
                       window.clearInterval(data.pollState)
                       window.clearInterval(data.pollStdout)
                       window.clearInterval(data.pollStderr)
                     }
+										if (data.state == "waiting") {
+											UIConsole.info("Job #"+data.uid+" is waiting. Expected start is "+ new Date(data.scheduled_at*1000)) ;
+										}
+										if (data.state == "running") {
+											if (!("pollStderr" in data)) {
+												UIConsole.info("Job #"+data.uid+" is running. Setup polling of stdout and stderr") ;			
+												// polling of STDOUT and STDERR not setup
+												// Check STDOUT and STDERR
+												_.each(["stdout", "stderr"], function(out) {
+													data[out] = ""
+													data["poll"+out.capitalize()] = window.setInterval(function() {
+														http.get(http.linkTo(site.links, "self")+"/public/"+data.user_uid+"/OAR."+data.uid+"."+out, {
+															cache: false,
+															dataType: "text",
+															ok: function(output) {
+																var diff = output.substring(data[out].length).split("\n")
+																data[out] = output
+																_.each(diff, function(line) {
+																	if (line != "") {
+																		UIConsole.info(line, data.site_uid+"/"+data.uid+"/"+out.toUpperCase())
+																	}
+																});
+															}
+														})
+													}, 3000)
+												});
+											}
+										}
                     if (_.all(submittedJobs, function(job) {
-                      return job.state != "running";
+                      return $.inArray(job.state, ["running", "launching", "waiting"]) == -1;
                     })) {
                       UIConsole.info("=> All jobs have terminated !")
                       UIConsole.hideBusyIndicator();
@@ -588,7 +644,6 @@ $(document).ready(function() {
                 })
               }, 5000);
             
-              submittedJobs.push(data);
             },
             ko: function() {
               UIConsole.info("Cannot submit the job on "+site.uid+". Cancelling all jobs...")

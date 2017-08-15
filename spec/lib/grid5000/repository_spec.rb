@@ -16,7 +16,7 @@ require 'spec_helper'
 
 describe Grid5000::Repository do
   before do
-    @latest_commit = "5b02702daa827f7e39ebf7396af26735c9d2aacd"
+    @latest_commit = "8a562420c9a659256eeaafcfd89dfa917b5fb4d0"
   end
   
   it "should instantiate a new repository object with the correct settings" do
@@ -52,13 +52,13 @@ describe Grid5000::Repository do
       end
       
       it "should find the commit associated with the given version [version=DATE] 1/2" do      
-        date = Time.parse("Fri Mar 13 17:24:20 2009 +0100")
+        date = Time.parse("2009-03-13 17:24:20 +0100")
         commit = @repository.find_commit_for(:version => date.to_i)
         commit.id.should == "b00bd30bf69c322ffe9aca7a9f6e3be0f29e20f4"
       end
       
       it "should find the commit associated with the given version [version=DATE] 2/2" do      
-        date = Time.parse("Fri Mar 13 17:24:47 2009 +0100")
+        date = Time.parse("2009-03-13 17:24:47 +0100")
         commit = @repository.find_commit_for(:version => date.to_i)
         commit.id.should == "e07895a4b480aaa8e11c35549a97796dcc4a307d"
       end
@@ -148,8 +148,9 @@ describe Grid5000::Repository do
         )
         result["items"].map{|i| 
           i['uid']
-        }.should == ['bordeaux', 'grenoble', 'rennes']
-        result["total"].should == 3
+        # abasu - 08.01.2016 - added to list 'nancy' and updated "total" from 3 to 4
+        }.should == ['bordeaux', 'grenoble', 'nancy', 'rennes']
+        result["total"].should == 4
         result["offset"].should == 0
       end
       it "should expand a tree of trees into a collection [environments]" do
@@ -192,7 +193,8 @@ describe Grid5000::Repository do
     
     describe "versions_for" do
       it "find the versions for a resource" do
-        @repository.versions_for("grid5000/sites")["total"].should == 8
+        # abasu - 24.10.2016 - update "total" value from 8 to 10
+        @repository.versions_for("grid5000/sites")["total"].should == 10
       end
       it "should return an empty list if the resource does not exist" do
         @repository.versions_for("grid5000/doesnotexist").should == {"total"=>0, "offset"=>0, "items"=>[]}

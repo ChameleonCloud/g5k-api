@@ -18,25 +18,35 @@ Api::Application.routes.draw do
   # The priority is based upon order of creation:
   # first created -> highest priority.
 
+  match "/exhibitv2/*rest", :to => redirect {|params| "/ui/javascripts/vendor/exhibitv2/#{params[:rest]}"}
   match '/versions' => 'versions#index', :via => [:get]
   match '/versions/:id' => 'versions#show', :via => [:get]
   match '*resource/versions' => 'versions#index', :via => [:get]
   match '*resource/versions/:id' => 'versions#show', :via => [:get]
 
-  resources :environments, :only => [:index, :show]
+  # abasu : 1 line introduced below for correction to bug ref 5065 -- 2015.01.23  
+  resources :environments, :only => [:index, :show], :constraints => { :id => /[0-9A-Za-z\-\.]+/ 	}
   resources :network_equipments, :only => [:index, :show]
-  resources :sites, :only => [:index, :show] do
+  resources :sites, :only => [:index, :show] do	
     member do
       get :status
     end
-    resources :environments, :only => [:index, :show]
+  # abasu : 1 line introduced below for correction to bug ref 5065 -- 2015.01.23  
+    resources :environments, :only => [:index, :show], :constraints => { :id => /[0-9A-Za-z\-\.]+/ }
     resources :network_equipments, :only => [:index, :show]
     resources :pdus, :only => [:index, :show]
     resources :clusters, :only => [:index, :show] do
+  # abasu : 3 lines introduced below for correction to bug ref 5856 -- 2015.04.17  
+      member do
+        get :status
+      end
       resources :nodes, :only => [:index, :show]
     end
+  # abasu bug #7301 to incorporate feature /servers -- 2016.10.24  
+    resources :servers, :only => [:index, :show]
     resources :jobs
-    resources :deployments
+  # abasu - bug #7179 : remove deployments from g5k-api in v4.0
+  #    resources :deployments
   end
   resources :notifications, :only => [:index, :create]
 

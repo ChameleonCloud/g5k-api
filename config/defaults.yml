@@ -15,7 +15,7 @@ defaults: &defaults
   smtp_port: 25
   smtp_from: notifications@api.grid5000.fr
   oar: &oar
-    adapter: em_mysql2
+    adapter: em_postgresql
     encoding: utf8
     pool: 20
     timeout: 5000
@@ -30,15 +30,18 @@ development:
   base_uri_in: http://localhost:8000
   base_uri_out: http://localhost:8000
   notifications_uri: https://localhost:3443/sid/notifications
-  reference_repository_path: ~/dev/g5k-api/reference-repository
+  reference_repository_path: ~/reference-repository
   smtp_host: localhost
   smtp_port: 2525
   oar:
     <<: *oar
     host: 127.0.0.1
-    port: 13307
+    port: 15433
+    username: oarreader
+    password: read
+    database: oar2
 
-test:
+test: &test
   <<: *defaults
   base_uri_in: http://api-in.local
   base_uri_out: http://api-out.local
@@ -49,9 +52,21 @@ test:
   oar:
     <<: *oar
     host: 127.0.0.1
+    port: 15432
+    username: root
+    password: oar
+    database: oar2_test
+
+test_mysql:
+  <<: *test
+  oar:
+    <<: *oar
+    adapter: em_mysql2
+    host: 127.0.0.1
     port: 13306
     username: root
-    password:
+    password:  
+    database: oar2
 
 
 production:

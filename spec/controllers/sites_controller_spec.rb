@@ -21,8 +21,8 @@ describe SitesController do
     it "should get the correct collection of sites" do
       get :index, :format => :json
       response.status.should == 200
-      json['total'].should == 3
-      json['items'].length.should == 3
+      json['total'].should == 4
+      json['items'].length.should == 4
       json['items'][0]['uid'].should == 'bordeaux'
       json['items'][0]['links'].should be_a(Array)
     end
@@ -64,7 +64,7 @@ describe SitesController do
       json['uid'].should == 'rennes'
       json['links'].map{|l| l['rel']}.sort.should == [
         "clusters",
-        "deployments",
+        "deployment", # abasu 19.10.2016 - bug #7364 changed "deployments" to "deployment"
         "environments",
         "jobs",
         "metrics",
@@ -83,7 +83,7 @@ describe SitesController do
       }['href'].should == "/sites/rennes/clusters"
       json['links'].find{|l|
         l['rel'] == 'version'
-      }['href'].should == "/sites/rennes/versions/5b02702daa827f7e39ebf7396af26735c9d2aacd"
+      }['href'].should == "/sites/rennes/versions/8a562420c9a659256eeaafcfd89dfa917b5fb4d0"
     end
     
     it "should return subresource links that are only in testing branch" do
@@ -91,7 +91,7 @@ describe SitesController do
       response.status.should == 200
       json['links'].map{|l| l['rel']}.sort.should == [
         "clusters",
-        "deployments",
+        "deployment", # abasu 19.10.2016 - bug #7364 changed "deployments" to "deployment"
         "environments",
         "jobs",
         "metrics",
@@ -105,6 +105,26 @@ describe SitesController do
       ]
     end
     
+    # abasu 19.10.2016 - bug #7364 changed "deployments" to "deployment"
+    it "should return link for deployment" do
+      get :show, :id => "rennes", :format => :json
+      response.status.should == 200
+      json['uid'].should == 'rennes'
+      json['links'].find{|l|
+        l['rel'] == 'deployment'
+      }['href'].should == "/sites/rennes/deployment"
+    end # it "should return link for deployment" do
+    
+    # abasu 26.10.2016 - bug #7301 should return link /servers if present in site
+    it "should return link /servers if present in site" do
+      get :show, :id => "nancy", :format => :json
+      response.status.should == 200
+      json['uid'].should == 'nancy'
+      json['links'].find{|l|
+        l['rel'] == 'servers'
+      }['href'].should == "/sites/nancy/servers"
+    end # it "should return link /servers if present in site" do
+
     it "should return the specified version, and the max-age value in the Cache-Control header should be big" do
       get :show, :id => "rennes", :format => :json, :version => "b00bd30bf69c322ffe9aca7a9f6e3be0f29e20f4"
       response.status.should == 200
@@ -119,37 +139,16 @@ describe SitesController do
 
 
   describe "GET /sites/{{site_id}}/status" do
-    it "should fail if the list of valid clusters cannot be fetched" do      
-      expected_url = "http://api-out.local:80/sites/rennes/clusters?branch=testing"
-      stub_request(:get, expected_url).
-        with(
-          :headers => {'Accept' => media_type(:json)}
-        ).
-        to_return(
-          :status => 400,
-          :body => "some error"
-        )
-      get :status, :branch => 'testing', :id => "rennes", :format => :json
-      response.status.should == 500
-      response.body.should == "Request to #{expected_url} failed with status 400: some error"
-    end
-    it "should return 200 and the site status" do      
-      expected_url = "http://api-out.local:80/sites/rennes/clusters?branch=master"
-      stub_request(:get, expected_url).
-        with(
-          :headers => {'Accept' => media_type(:json)}
-        ).
-        to_return(:body => fixture("grid5000-rennes-clusters.json"))
+    it "should return 200 and the site status" do
       get :status, :id => "rennes", :format => :json
       response.status.should == 200
 
-      json['nodes'].length.should == 162
+      json['nodes'].length.should == 196
       json['nodes'].keys.map{|k| k.split('-')[0]}.uniq.sort.should == [
-        'paradent',
+        'paraquad',
         'paramount',
-        'parapide',
-        'parapluie'
-      ]
+        'paravent'
+      ].sort
     end
     # it "should fail if the site does not exist" do
     #   pending "this will be taken care of at the api-proxy layer"

@@ -15,11 +15,11 @@
 require 'rubygems'
 
 require 'yaml'
-YAML::ENGINE.yamler = "syck"
+YAML::ENGINE.yamler = "psych"
 
 # Attempts to use a vendored Bundler, if any
 vendored_gems = File.expand_path(
-  '../../vendor/bundle/ruby/1.9.1/gems', __FILE__
+  '../../vendor/bundle/ruby/2.1.5/gems', __FILE__
 )
 
 vendored_bundler = Dir["#{vendored_gems}/bundler-*/lib"].sort.last
