@@ -6,7 +6,7 @@ production:
   timeout: 5000
   username: root
   password:
-  host: 127.0.0.1
+  host: localhost
 
 development:
   adapter: em_mysql2
@@ -16,7 +16,7 @@ development:
   timeout: 5000
   username: root
   password:
-  host: 127.0.0.1
+  host: localhost
   port: 13306
 
 # Warning: The database defined as "test" will be erased and
@@ -30,6 +30,6 @@ test:
   timeout: 5000
   username: root
   password:
-  host: 127.0.0.1
+  host: localhost
   port: 13306
 
